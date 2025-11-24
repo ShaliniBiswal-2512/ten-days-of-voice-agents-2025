@@ -1,6 +1,11 @@
 import logging
-
+import os
+import json
+import datetime
+import tempfile
+import threading
 from dotenv import load_dotenv
+
 from livekit.agents import (
     Agent,
     AgentSession,
@@ -12,94 +17,148 @@ from livekit.agents import (
     cli,
     metrics,
     tokenize,
-    # function_tool,
-    # RunContext
+    function_tool,
+    RunContext,
 )
 from livekit.plugins import murf, silero, google, deepgram, noise_cancellation
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 logger = logging.getLogger("agent")
-
 load_dotenv(".env.local")
 
+# File persistence settings
+DATA_DIR = os.path.join(os.getcwd(), "backend")
+DATA_FILE = os.path.join(DATA_DIR, "wellness_log.json")
+_file_lock = threading.Lock()
+
+def ensure_data_file():
+    os.makedirs(DATA_DIR, exist_ok=True)
+    if not os.path.exists(DATA_FILE):
+        with open(DATA_FILE, "w", encoding="utf-8") as f:
+            json.dump([], f, indent=2, ensure_ascii=False)
+
+def read_all_entries():
+    ensure_data_file()
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        try:
+            return json.load(f)
+        except Exception:
+            return []
+
+def atomic_write_all(entries):
+    ensure_data_file()
+    fd, tmp = tempfile.mkstemp(suffix=".json", prefix="tmp_", dir=DATA_DIR)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            json.dump(entries, f, indent=2, ensure_ascii=False)
+        os.replace(tmp, DATA_FILE)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except Exception:
+                pass
 
 class Assistant(Agent):
     def __init__(self) -> None:
         super().__init__(
-            instructions="""You are a helpful voice AI assistant. The user is interacting with you via voice, even if you perceive the conversation as text.
-            You eagerly assist users with their questions by providing information from your extensive knowledge.
-            Your responses are concise, to the point, and without any complex formatting or punctuation including emojis, asterisks, or other symbols.
-            You are curious, friendly, and have a sense of humor.""",
+            instructions=(
+                "You are a friendly, grounded Health & Wellness voice companion. "
+                "Your role is supportive: run a short daily check-in asking about the user's mood, energy, "
+                "stress, and 1–3 practical intentions for the day. Do NOT give medical diagnoses or treatment. "
+                "Keep suggestions small and actionable (e.g., 'take a 5-minute walk', 'try a 2-minute stretch', "
+                "'break the task into a 10-minute starter'). Ask one question at a time. "
+                "At the end, summarize today's mood and objectives and ask 'Does this sound right?'. "
+                "After confirmation, call the function save_checkin with a payload that includes at least: "
+                "timestamp, mood (text), mood_score (optional numeric 1-10), energy (low/medium/high), "
+                "objectives (list), and agent_summary (one-line). "
+                "On session start, call get_last_checkin to retrieve the previous session and include one brief "
+                "reference to it (for example: 'Last time you said you were low energy. How is today different?'). "
+                "Keep each turn short; aim for 6-12 turns. Be empathetic, concise, and non-judgmental."
+            )
         )
+        # Temporary in-memory state during a session (not required but helpful)
+        self.current_session_state = {
+            "mood": "",
+            "mood_score": None,
+            "energy": "",
+            "objectives": [],
+            "agent_summary": "",
+        }
 
-    # To add tools, use the @function_tool decorator.
-    # Here's an example that adds a simple weather tool.
-    # You also have to add `from livekit.agents import function_tool, RunContext` to the top of this file
-    # @function_tool
-    # async def lookup_weather(self, context: RunContext, location: str):
-    #     """Use this tool to look up current weather information in the given location.
-    #
-    #     If the location is not supported by the weather service, the tool will indicate this. You must tell the user the location's weather is unavailable.
-    #
-    #     Args:
-    #         location: The location to look up weather information for (e.g. city name)
-    #     """
-    #
-    #     logger.info(f"Looking up weather for {location}")
-    #
-    #     return "sunny with a temperature of 70 degrees."
+    @function_tool
+    async def save_checkin(self, context: RunContext, payload: dict):
+        """
+        Persist a check-in to backend/wellness_log.json.
+        Expects payload keys: mood (str), mood_score (int|None), energy (str), objectives (list[str]), agent_summary (str), meta (optional dict)
+        Returns a confirmation string.
+        """
+        # Basic validation and normalization
+        mood = payload.get("mood", "").strip()
+        mood_score = payload.get("mood_score", None)
+        energy = payload.get("energy", "").strip()
+        objectives = payload.get("objectives", []) or []
+        if isinstance(objectives, str):
+            # Accept comma-separated string too
+            objectives = [o.strip() for o in objectives.split(",") if o.strip()]
+        agent_summary = payload.get("agent_summary", "").strip()
+        meta = payload.get("meta", {})
 
+        entry = {
+            "id": datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(),
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).astimezone().isoformat(),
+            "mood": mood,
+            "mood_score": mood_score,
+            "energy": energy,
+            "objectives": objectives,
+            "agent_summary": agent_summary,
+            "meta": meta,
+        }
+
+        # Append safely
+        with _file_lock:
+            entries = read_all_entries()
+            entries.append(entry)
+            try:
+                atomic_write_all(entries)
+            except Exception as e:
+                logger.exception("Failed to save checkin")
+                return f"Failed to save check-in: {e}"
+
+        return f"Check-in saved. ({len(entry['objectives'])} objectives recorded)"
+
+    @function_tool
+    async def get_last_checkin(self, context: RunContext):
+        """
+        Return the most recent check-in entry or None if none exists.
+        """
+        with _file_lock:
+            entries = read_all_entries()
+        if not entries:
+            return None
+        return entries[-1]
 
 def prewarm(proc: JobProcess):
+    # prewarm VAD model as before
     proc.userdata["vad"] = silero.VAD.load()
 
-
 async def entrypoint(ctx: JobContext):
-    # Logging setup
-    # Add any other context you want in all log entries here
-    ctx.log_context_fields = {
-        "room": ctx.room.name,
-    }
+    ctx.log_context_fields = {"room": ctx.room.name}
 
-    # Set up a voice AI pipeline using OpenAI, Cartesia, AssemblyAI, and the LiveKit turn detector
     session = AgentSession(
-        # Speech-to-text (STT) is your agent's ears, turning the user's speech into text that the LLM can understand
-        # See all available models at https://docs.livekit.io/agents/models/stt/
         stt=deepgram.STT(model="nova-3"),
-        # A Large Language Model (LLM) is your agent's brain, processing user input and generating a response
-        # See all available models at https://docs.livekit.io/agents/models/llm/
-        llm=google.LLM(
-                model="gemini-2.5-flash",
-            ),
-        # Text-to-speech (TTS) is your agent's voice, turning the LLM's text into speech that the user can hear
-        # See all available models as well as voice selections at https://docs.livekit.io/agents/models/tts/
+        llm=google.LLM(model="gemini-2.5-flash"),
         tts=murf.TTS(
-                voice="en-US-matthew", 
-                style="Conversation",
-                tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
-                text_pacing=True
-            ),
-        # VAD and turn detection are used to determine when the user is speaking and when the agent should respond
-        # See more at https://docs.livekit.io/agents/build/turns
+            voice="en-US-matthew",
+            style="Conversation",
+            tokenizer=tokenize.basic.SentenceTokenizer(min_sentence_len=2),
+            text_pacing=True,
+        ),
         turn_detection=MultilingualModel(),
         vad=ctx.proc.userdata["vad"],
-        # allow the LLM to generate a response while waiting for the end of turn
-        # See more at https://docs.livekit.io/agents/build/audio/#preemptive-generation
         preemptive_generation=True,
     )
 
-    # To use a realtime model instead of a voice pipeline, use the following session setup instead.
-    # (Note: This is for the OpenAI Realtime API. For other providers, see https://docs.livekit.io/agents/models/realtime/))
-    # 1. Install livekit-agents[openai]
-    # 2. Set OPENAI_API_KEY in .env.local
-    # 3. Add `from livekit.plugins import openai` to the top of this file
-    # 4. Use the following session setup instead of the version above
-    # session = AgentSession(
-    #     llm=openai.realtime.RealtimeModel(voice="marin")
-    # )
-
-    # Metrics collection, to measure pipeline performance
-    # For more information, see https://docs.livekit.io/agents/build/metrics/
     usage_collector = metrics.UsageCollector()
 
     @session.on("metrics_collected")
@@ -113,27 +172,17 @@ async def entrypoint(ctx: JobContext):
 
     ctx.add_shutdown_callback(log_usage)
 
-    # # Add a virtual avatar to the session, if desired
-    # # For other providers, see https://docs.livekit.io/agents/models/avatar/
-    # avatar = hedra.AvatarSession(
-    #   avatar_id="...",  # See https://docs.livekit.io/agents/models/avatar/plugins/hedra
-    # )
-    # # Start the avatar and wait for it to join
-    # await avatar.start(session, room=ctx.room)
-
-    # Start the session, which initializes the voice pipeline and warms up the models
+    # Start the session with the Assistant
     await session.start(
         agent=Assistant(),
         room=ctx.room,
         room_input_options=RoomInputOptions(
-            # For telephony applications, use `BVCTelephony` for best results
             noise_cancellation=noise_cancellation.BVC(),
         ),
     )
 
-    # Join the room and connect to the user
+    # Connect to the room and user
     await ctx.connect()
-
 
 if __name__ == "__main__":
     cli.run_app(WorkerOptions(entrypoint_fnc=entrypoint, prewarm_fnc=prewarm))
