@@ -1,0 +1,9 @@
+{
+  "drinkType": "coffee",
+  "size": "small",
+  "milk": "oat milk",
+  "extras": [
+    "cookie"
+  ],
+  "name": "Sia"
+}
