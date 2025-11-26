@@ -1,0 +1,55 @@
+{
+  "company": {
+    "name": "Blinkit",
+    "domain": "blinkit.com",
+    "about": "Blinkit (formerly Grofers) is an Indian quick-commerce platform that delivers groceries and daily essentials in minutes using a dense network of dark stores and delivery partners across Indian cities.",
+    "founded": "2013",
+    "headquarters": "Gurgaon (Gurugram), Haryana, India"
+  },
+  "faq": [
+    {
+      "q": "What is Blinkit?",
+      "a": "Blinkit is an instant grocery and essentials delivery app in India that delivers items like fruits, vegetables, snacks, dairy, household items and more in minutes."
+    },
+    {
+      "q": "Is Blinkit an Indian company?",
+      "a": "Yes — Blinkit is an Indian quick-commerce company. It was founded in India and operates across Indian cities."
+    },
+    {
+      "q": "What was Blinkit called earlier?",
+      "a": "Blinkit was previously known as Grofers. The company rebranded to Blinkit when it shifted its focus to ultra-fast deliveries."
+    },
+    {
+      "q": "How fast does Blinkit deliver?",
+      "a": "Blinkit aims to deliver most orders in around 10 minutes in supported areas, using nearby dark stores and hyperlocal riders."
+    },
+    {
+      "q": "Which cities does Blinkit serve?",
+      "a": "Blinkit serves many major Indian cities and urban areas. Availability depends on your pincode, which you can check in the Blinkit app or on the website."
+    },
+    {
+      "q": "Does Blinkit charge delivery fees?",
+      "a": "Blinkit may charge a delivery fee depending on factors like order value, time of day, locality and ongoing offers. Some orders may qualify for free or discounted delivery."
+    },
+    {
+      "q": "Does Blinkit have a minimum order value?",
+      "a": "Yes — there is usually a minimum order value which can vary by city and locality. The app shows you the applicable minimum for your area."
+    },
+    {
+      "q": "What can I order on Blinkit?",
+      "a": "You can order groceries, fruits and vegetables, dairy, bakery, snacks, beverages, personal care, baby and pet care items, home essentials and more. The exact catalog may vary by location."
+    },
+    {
+      "q": "Who owns Blinkit?",
+      "a": "Blinkit is owned by Eternal Limited (formerly Zomato Limited), which acquired Blinkit in an all-stock deal."
+    },
+    {
+      "q": "How can I contact Blinkit support?",
+      "a": "Customer support is available directly through the Blinkit app or website via the Help/Support section for order issues, refunds or replacements."
+    }
+  ],
+  "service_notes": {
+    "delivery_promise": "Instant commerce with grocery and essentials delivered in minutes via dark stores and hyperlocal delivery partners.",
+    "note": "Delivery time, fees, and availability depend on locality, time, demand and dark-store coverage. Exact offerings may vary by city."
+  }
+}
