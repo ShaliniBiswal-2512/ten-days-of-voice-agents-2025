@@ -76,22 +76,22 @@ def init_db():
         """)
         seed = [
             (
-                "case-001", "Shivam", "SID-12345", "**** 4242", "₹3,250.00",
+                "case-001", "Sam", "SID-12345", "**** 4242", "₹9,650.00",
                 "ABC Industry", "Bengaluru, IN", "2025-11-20T14:32:00+05:30",
-                "e-commerce", "alibaba.com", "What is your favorite color?", "blue",
+                "e-commerce", "amazon.com", "What is your favorite color?", "black",
                 "pending_review", "[]"
             ),
             (
-                "case-002", "John", "SID-54321", "**** 1234", "₹9,999.00",
+                "case-002", "Peter", "SID-54321", "**** 1234", "₹5,999.00",
                 "Zeta Electronics", "Delhi, IN", "2025-11-24T09:12:00+05:30",
-                "electronics", "zetastore.fake", "What city were you born in?", "delhi",
+                "electronics", "sightrun.fake", "What city were you born in?", "london",
                 "pending_review", "[]"
             ),
             (
-                "case-003", "Sneha", "SID-67890", "**** 7788", "₹5,499.00",
+                "case-003", "John", "SID-67890", "**** 7788", "₹8,499.00",
                 "Fashion Hub", "Mumbai, IN", "2025-11-26T19:45:00+05:30",
                 "fashion", "fashionhub.fake",
-                "What is your pet’s name?", "duster",
+                "What is your pet’s name?", "oreo",
                 "pending_review", "[]"
             )
         ]
@@ -166,7 +166,7 @@ class FraudState:
 # Helper text builders (safe: never include securityAnswer)
 # -----------------------
 def make_intro_text(user_name: str) -> str:
-    return (f"Hello {user_name}. This is the Fraud Prevention team from State Bank of India. "
+    return (f"Hello {user_name}. This is the Fraud Prevention team from Axis Bank. "
             "We are contacting you about a suspicious transaction on your account. "
             "For your security I will ask a verification question before we proceed.")
 
@@ -271,7 +271,7 @@ class FraudAgentLLM(Agent):
     def __init__(self):
         super().__init__(
             instructions="""
-            You are a calm, professional fraud prevention representative for State Bank of India.
+            You are a calm, professional fraud prevention representative for Axis Bank.
             Flow:
              1) Ask for customer's name to locate a pending fraud case.
              2) Use load_case_for_user(user_name) to fetch case. Do NOT ask for or reveal secrets.
